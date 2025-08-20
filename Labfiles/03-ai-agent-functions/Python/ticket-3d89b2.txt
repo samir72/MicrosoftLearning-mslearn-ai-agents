@@ -1,0 +1,4 @@
+Support ticket: 3d89b2
+Submitted by: a@a.com
+Description:
+Data pipeline from this morning failed.
