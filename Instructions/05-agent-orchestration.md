@@ -6,9 +6,13 @@ lab:
 
 # Develop a multi-agent solution
 
-In this exercise, you'll create a project that orchestrates two AI agents using the Semantic Kernel SDK. An *Incident Manager* agent will analyze service log files for issues. If an issue is found, the Incident Manager will recommend a resolution action, and a *DevOps Assistant* agent will receive the recommendation and invoke the corrective function and perform the resolution. The Incident Manager agent will then review the updated logs to make sure the resolution was successful.
+In this exercise, you'll practice using the sequential orchestration pattern in the Semantic Kernel SDK. You'll create a simple pipeline of three agents that work together to process customer feedback and suggest next steps. You'll create the following agents:
 
-For this exercise, four sample log files are provided. The DevOps Assistant agent code only updates the sample log files with some example log messages.
+- The Summarizer agent will condense raw feedback into a short, neutral sentence.
+- The Classifier agent will categorize the feedback as Positive, Negative, or a Feature request.
+- Finally, the Recommended Action agent will recommend an appropriate follow-up step.
+
+You'll learn how to use the Semantic Kernel SDK to break down a problem, route it through the right agents, and produce actionable results. Let's get started!
 
 > **Tip**: The code used in this exercise is based on the for Semantic Kernel SDK for Python. You can develop similar solutions using the SDKs for Microsoft .NET and Java. Refer to [Supported Semantic Kernel languages](https://learn.microsoft.com/semantic-kernel/get-started/supported-languages) for details.
 
@@ -36,15 +40,10 @@ Let's start by deploying a model in an Azure AI Foundry project.
     > \* Some Azure AI resources are constrained by regional model quotas. In the event of a quota limit being exceeded later in the exercise, there's a possibility you may need to create another resource in a different region.
 
 1. Select **Create** and wait for your project, including the gpt-4 model deployment you selected, to be created.
+
 1. When your project is created, the chat playground will be opened automatically.
 
-    > **Note**: The default TPM setting for this model may be too low for this exercise. A lower TPM helps avoid over-using the quota available in the subscription you are using. 
-
 1. In the navigation pane on the left, select **Models and endpoints** and select your **gpt-4o** deployment.
-
-1. Select **Edit** then increase the **Tokens per Minute Rate Limit**
-
-   > **NOTE**: 40,000 TPM should be sufficient for the data used in this exercise. If your available quota is lower than this, you will be able to complete the exercise but you may need to wait and resubmit prompts if the rate limit is exceeded.
 
 1. In the **Setup** pane, note the name of your model deployment; which should be **gpt-4o**. You can confirm this by viewing the deployment in the **Models and endpoints** page (just open that page in the navigation pane on the left).
 1. In the navigation pane on the left, select **Overview** to see the main page for your project; which looks like this:
@@ -109,7 +108,7 @@ Now you're ready to create a client app that defines an agent and a custom funct
 
     The file is opened in a code editor.
 
-1. In the code file, replace the **your_project_endpoint** placeholder with the endpoint for your project (copied from the project **Overview** page in the Azure AI Foundry portal), and the **your_model_deployment** placeholder with the name you assigned to your gpt-4o model deployment.
+1. In the code file, replace the **your_openai_endpoint** placeholder with the Azure Open AI endpoint for your project (copied from the project **Overview** page in the Azure AI Foundry portal under **Azure OpenAI**). Replace the **your_openai_api_key** with the API Key for your project, and ensure that the MODEL_DEPLOYMENT_NAME variable is set to your model deployment name (which should be *gpt-4o*).
 
 1. After you've replaced the placeholders, use the **CTRL+S** command to save your changes and then use the **CTRL+Q** command to close the code editor while keeping the cloud shell command line open.
 
@@ -117,157 +116,141 @@ Now you're ready to create a client app that defines an agent and a custom funct
 
 Now you're ready to create the  agents for your multi-agent solution! Let's get started!
 
-1. Enter the following command to edit the **agent_chat.py** file:
+1. Enter the following command to edit the **agents.py** file:
 
     ```
-   code agent_chat.py
+   code agents.py
     ```
 
-1. Review the code in the file, noting that it contains:
-    - Constants that define the names and instructions for your two agents.
-    - A **main** function where most of the code to implement your multi-agent solution will be added.
-    - A **SelectionStrategy** class, which you'll use to implement the logic required to determine which agent should be selected for each turn in the conversation.
-    - An **ApprovalTerminationStrategy** class, which you'll use to implement the logic needed to determine when the conversation to end.
-    - A **DevopsPlugin** class that contains functions to perform devops operations.
-    - A **LogFilePlugin** class that contains functions to read and write log files.
-
-    First, you'll create the *Incident Manager* agent, which will analyze service log files, identify potential issues, and recommend resolution actions or escalate issues when necessary.
-
-1. Note the **INCIDENT_MANAGER_INSTRUCTIONS** string. These are the instructions for your agent.
-
-1. In the **main** function, find the comment **Create the incident manager agent on the Azure AI agent service**, and add the following code to create an Azure AI Agent.
+1. At the top of the file under the comment **Add references**, and add the following code to reference the namespaces in the libraries you'll need to implement your agent:
 
     ```python
-   # Create the incident manager agent on the Azure AI agent service
-   incident_agent_definition = await client.agents.create_agent(
-        model=ai_agent_settings.model_deployment_name,
-        name=INCIDENT_MANAGER,
-        instructions=INCIDENT_MANAGER_INSTRUCTIONS
+   # Add references
+   import asyncio
+   from semantic_kernel.agents import Agent, ChatCompletionAgent, SequentialOrchestration
+   from semantic_kernel.agents.runtime import InProcessRuntime
+   from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+   from semantic_kernel.contents import ChatMessageContent
+    ```
+
+
+1. In the **get_agents** function, add the following code under the comment **Create a summarizer agent**:
+
+    ```python
+   # Create a summarizer agent
+   summarizer_agent = ChatCompletionAgent(
+       name="SummarizerAgent",
+       instructions="""
+       Summarize the customer's feedback in one short sentence. Keep it neutral and concise.
+       Example output:
+       App crashes during photo upload.
+       User praises dark mode feature.
+       """,
+       service=AzureChatCompletion(),
    )
     ```
 
-    This code creates the agent definition on your Azure AI Project client.
-
-1. Find the comment **Create a Semantic Kernel agent for the Azure AI incident manager agent**, and add the following code to create a Semantic Kernel agent based on the Azure AI Agent definition.
+1. Add the following code under the comment **Create a classifier agent**:
 
     ```python
-   # Create a Semantic Kernel agent for the Azure AI incident manager agent
-   agent_incident = AzureAIAgent(
-        client=client,
-        definition=incident_agent_definition,
-        plugins=[LogFilePlugin()]
+   # Create a classifier agent
+   classifier_agent = ChatCompletionAgent(
+       name="ClassifierAgent",
+       instructions="""
+       Classify the feedback as one of the following: Positive, Negative, or Feature request.
+       """,
+       service=AzureChatCompletion(),
    )
     ```
 
-    This code creates the Semantic Kernel agent with access to the **LogFilePlugin**. This plugin allows the agent to read the log file contents.
+1. Add the following code under the comment **Create a recommended action agent**:
 
-    Now let's create the second agent, which will respond to issues and perform DevOps operations to resolve them.
+    ```python
+   # Create a recommended action agent
+   action_agent = ChatCompletionAgent(
+       name="ActionAgent",
+       instructions="""
+       Based on the summary and classification, suggest the next action in one short sentence.
+       Example output:
+       Escalate as a high-priority bug for the mobile team.
+       Log as positive feedback to share with design and marketing.
+       Log as enhancement request for product backlog.
+       """,
+       service=AzureChatCompletion(),
+   )
+    ```
 
-1. At the top of the code file, take a moment to observe the **DEVOPS_ASSISTANT_INSTRUCTIONS** string. These are the instructions you'll provide to the new DevOps assistant agent.
+1. Add the following code under the comment **Return a list of agents**:
 
-1. Find the comment **Create the devops agent on the Azure AI agent service**, and add the following code to create an Azure AI Agent definition:
+    ```python
+   # Return a list of agents
+   return [summarizer_agent, classifier_agent, action_agent]
+    ```
+
+    The order of the agents in this list will be the order that they are selected during the orchestration.
+
+## Create a sequential orchestration
+
+1. In the **main** function, find the comment **Initialize the input task** and add the following code:
     
     ```python
-   # Create the devops agent on the Azure AI agent service
-   devops_agent_definition = await client.agents.create_agent(
-        model=ai_agent_settings.model_deployment_name,
-        name=DEVOPS_ASSISTANT,
-        instructions=DEVOPS_ASSISTANT_INSTRUCTIONS,
+   # Initialize the input task
+   task="""
+   I tried updating my profile picture several times today, but the app kept freezing halfway through the process. 
+   I had to restart it three times, and in the end, the picture still wouldn't upload. 
+   It's really frustrating and makes the app feel unreliable.
+   """
+    ```
+
+1. Under the comment **Create a sequential orchestration**, add the following code to define a sequential orchestration with a response callback:
+
+    ```python
+   # Create a sequential orchestration
+   sequential_orchestration = SequentialOrchestration(
+       members=get_agents(),
+       agent_response_callback=agent_response_callback,
    )
     ```
 
-1. Find the comment **Create a Semantic Kernel agent for the devops Azure AI agent**, and add the following code to create a Semantic Kernel agent based on the Azure AI Agent definition.
-    
+    The `agent_response_callback` will allow you to view the response from each agent during the orchestration.
+
+1. Add the following code under the comment **Create a runtime and start it**:
+
     ```python
-   # Create a Semantic Kernel agent for the devops Azure AI agent
-   agent_devops = AzureAIAgent(
-        client=client,
-        definition=devops_agent_definition,
-        plugins=[DevopsPlugin()]
+   # Create a runtime and start it
+   runtime = InProcessRuntime()
+   runtime.start()
+    ```
+
+1. Add the following code under the comment **Invoke the orchestration with a task and the runtime**:
+
+    ```python
+   # Invoke the orchestration with a task and the runtime
+   orchestration_result = await sequential_orchestration.invoke(
+       task=task,
+       runtime=runtime,
    )
     ```
 
-    The **DevopsPlugin** allows the agent to simulate devops tasks, such as restarting the service or rolling back a transaction.
-
-### Define group chat strategies
-
-Now you need to provide the logic used to determine which agent should be selected to take the next turn in a conversation, and when the conversation should be ended.
-
-Let's start with the **SelectionStrategy**, which identifies which agent should take the next turn.
-
-1. In the **SelectionStrategy** class (below the **main** function), find the comment **Select the next agent that should take the next turn in the chat**, and add the following code to define a selection function:
+1. Add the following code under the comment **Wait for the results**:
 
     ```python
-   # Select the next agent that should take the next turn in the chat
-   async def select_agent(self, agents, history):
-        """"Check which agent should take the next turn in the chat."""
-
-        # The Incident Manager should go after the User or the Devops Assistant
-        if (history[-1].name == DEVOPS_ASSISTANT or history[-1].role == AuthorRole.USER):
-            agent_name = INCIDENT_MANAGER
-            return next((agent for agent in agents if agent.name == agent_name), None)
-        
-        # Otherwise it is the Devops Assistant's turn
-        return next((agent for agent in agents if agent.name == DEVOPS_ASSISTANT), None)
+   # Wait for the results
+   value = await orchestration_result.get(timeout=20)
+   print(f"\n****** Task Input ******{task}")
+   print(f"***** Final Result *****\n{value}")
     ```
 
-    This code runs on every turn to determine which agent should respond, checking the chat history to see who last responded.
+    In this code, you retrieve and display the result of the orchestration. If the orchestration does not complete within the specified timeout, a timeout exception will be thrown.
 
-    Now let's implement the **ApprovalTerminationStrategy** class to help signal when the goal is complete and the conversation can be ended.
-
-1. In the **ApprovalTerminationStrategy** class, find the comment **End the chat if the agent has indicated there is no action needed**, and add the following code to define the termination function:
+1. Find the comment **Stop the runtime when idle**, and add the following code:
 
     ```python
-   # End the chat if the agent has indicated there is no action needed
-   async def should_agent_terminate(self, agent, history):
-        """Check if the agent should terminate."""
-        return "no action needed" in history[-1].content.lower()
+   # Stop the runtime when idle
+   await runtime.stop_when_idle()
     ```
 
-    The kernel invokes this function after the agent's response to determine if the completion criteria are met. In this case, the goal is met when the incident manager responds with "No action needed." This phrase is defined in the incident manager agent instructions.
-
-### Implement the group chat
-
-Now that you have two agents, and strategies to help them take turns and end a chat, you can implement the group chat.
-
-1. Back up in the main function, find the comment **Add the agents to a group chat with a custom termination and selection strategy**, and add the following code to create the group chat:
-
-    ```python
-   # Add the agents to a group chat with a custom termination and selection strategy
-   chat = AgentGroupChat(
-        agents=[agent_incident, agent_devops],
-        termination_strategy=ApprovalTerminationStrategy(
-            agents=[agent_incident], 
-            maximum_iterations=10, 
-            automatic_reset=True
-        ),
-        selection_strategy=SelectionStrategy(agents=[agent_incident,agent_devops]),      
-   )
-    ```
-
-    In this code, you create an agent group chat object with the incident manager and devops agents. You also define the termination and selection strategies for the chat. Notice that the **ApprovalTerminationStrategy** is tied to the incident manager agent only, and not the devops agent. This makes the incident manager agent is responsible for signaling the end of the chat. The **SelectionStrategy** includes all agents that should take a turn in the chat.
-
-    Note that the automatic reset flag will automatically clear the chat when it ends. This way, the agent can continue analyzing the files without the chat history object using too many unnecessary tokens. 
-
-1. Find the comment **Append the current log file to the chat**, and add the following code to add the most recently read log file text to the chat:
-
-    ```python
-   # Append the current log file to the chat
-   await chat.add_chat_message(logfile_msg)
-   print()
-    ```
-
-1. Find the comment **Invoke a response from the agents**, and add the following code to invoke the group chat:
-
-    ```python
-   # Invoke a response from the agents
-   async for response in chat.invoke():
-        if response is None or not response.name:
-            continue
-        print(f"{response.content}")
-    ```
-
-    This is the code that triggers the chat. Since the log file text has been added as a message, the selection strategy will determine which agent should read and respond to it and then the conversation will continue between the agents until the conditions of the termination strategy are met or the maximum number of iterations is reached.
+    After processing is complete, stop the runtime to clean up resources.
 
 1. Use the **CTRL+S** command to save your changes to the code file. You can keep it open (in case you need to edit the code to fix any errors) or use the **CTRL+Q** command to close the code editor while keeping the cloud shell command line open.
 
@@ -290,41 +273,40 @@ Now you're ready to run your code and watch your AI agents collaborate.
 1. After you have signed in, enter the following command to run the application:
 
     ```
-   python agent_chat.py
+   python agents.py
     ```
 
     You should see some output similar to the following:
 
     ```output
-    
-    INCIDENT_MANAGER > /home/.../logs/log1.log | Restart service ServiceX
-    DEVOPS_ASSISTANT > Service ServiceX restarted successfully.
-    INCIDENT_MANAGER > No action needed.
+    # SummarizerAgent
+    App freezes during profile picture upload, preventing completion.
+    # ClassifierAgent
+    Negative
+    # ActionAgent
+    Escalate as a high-priority bug for the development team.
 
-    INCIDENT_MANAGER > /home/.../logs/log2.log | Rollback transaction for transaction ID 987654.
-    DEVOPS_ASSISTANT > Transaction rolled back successfully.
-    INCIDENT_MANAGER > No action needed.
+    ****** Task Input ******
+    I tried updating my profile picture several times today, but the app kept freezing halfway through the process.
+    I had to restart it three times, and in the end, the picture still wouldn't upload.
+    It's really frustrating and makes the app feel unreliable.
 
-    INCIDENT_MANAGER > /home/.../logs/log3.log | Increase quota.
-    DEVOPS_ASSISTANT > Successfully increased quota.
-    (continued)
+    ***** Final Result *****
+    Escalate as a high-priority bug for the development team.
     ```
 
-    > **Note**: The app includes some code to wait between processing each log file to try to reduce the risk of a TPM rate limit being exceeded, and exception handling in case it happens anyway. If there is insufficient quota available in your subscription, the model may not be able to respond.
+1. Optionally, you can try running the code using different task inputs, such as:
 
-1. Verify that the log files in the **logs** folder are updated with resolution operation messages from the DevopsAssistant.
-
-    For example, log1.log should have the following log messages appended:
-
-    ```log
-    [2025-02-27 12:43:38] ALERT  DevopsAssistant: Multiple failures detected in ServiceX. Restarting service.
-    [2025-02-27 12:43:38] INFO  ServiceX: Restart initiated.
-    [2025-02-27 12:43:38] INFO  ServiceX: Service restarted successfully.
+    ```output
+    I use the dashboard every day to monitor metrics, and it works well overall. But when I'm working late at night, the bright screen is really harsh on my eyes. If you added a dark mode option, it would make the experience much more comfortable.
+    ```
+    ```output
+    I reached out to your customer support yesterday because I couldn't access my account. The representative responded almost immediately, was polite and professional, and fixed the issue within minutes. Honestly, it was one of the best support experiences I've ever had.
     ```
 
 ## Summary
 
-In this exercise, you used the Azure AI Agent Service and Semantic Kernel SDK to create AI incident and devops agents that can automatically detect issues and apply resolutions. Great work!
+In this exercise, you practiced sequential orchestration with the Semantic Kernel SDK, combining multiple agents into a single, streamlined workflow. Great work!
 
 ## Clean up
 

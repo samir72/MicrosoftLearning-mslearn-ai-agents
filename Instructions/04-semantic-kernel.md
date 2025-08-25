@@ -147,7 +147,7 @@ Now you're ready to create a client app that defines an agent and a custom funct
 
     > **Note**: The function *simulates* sending an email by printing it to the console. In a real application, you'd use an SMTP service or similar to actually send the email!
 
-1. Back up above the new **EmailPlugin** class code, in the **create_expense_claim** function, find the comment **Get configuration settings**, and add the following code to load the configuration file and create an **AzureAIAgentSettings** object (which will automatically include the Azure AI Agent settings from the configuration).
+1. Back up above the new **EmailPlugin** class code, in the **process_expenses_data** function, find the comment **Get configuration settings**, and add the following code to load the configuration file and create an **AzureAIAgentSettings** object (which will automatically include the Azure AI Agent settings from the configuration).
 
     (Be sure to maintain the indentation level)
 
