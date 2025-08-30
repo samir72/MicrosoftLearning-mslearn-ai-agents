@@ -64,7 +64,7 @@ async def main():
     tasks = [asyncio.create_task(start_server(server)) for server in servers]
 
     # Wait briefly to ensure servers are up
-    await asyncio.sleep(10)  # Adjust delay if needed
+    # await asyncio.sleep(10)  # Adjust delay if needed
     
     # Call the routing agent client main function
     # It is commented out to avoid blocking the server tasks
