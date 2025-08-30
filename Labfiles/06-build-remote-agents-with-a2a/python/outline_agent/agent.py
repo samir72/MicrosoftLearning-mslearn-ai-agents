@@ -12,7 +12,7 @@ class OutlineAgent:
 
         # Create the agents client
         self.client = AgentsClient(
-            endpoint=os.environ['PROJECT_ENDPOINT'],
+            endpoint=os.environ['SA_PROJECT_ENDPOINT'],
             credential=DefaultAzureCredential(
                 exclude_environment_credential=True,
                 exclude_managed_identity_credential=True
@@ -27,7 +27,7 @@ class OutlineAgent:
 
         # Create the title agent
         self.agent = self.client.create_agent(
-            model=os.environ['MODEL_DEPLOYMENT_NAME'],
+            model=os.environ['SA_MODEL_DEPLOYMENT_NAME'],
             name='foundry-outline-agent',
             instructions="""
             You are a helpful writing assistant.

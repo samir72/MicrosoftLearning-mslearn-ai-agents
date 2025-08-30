@@ -33,7 +33,10 @@ servers = [
 
 server_procs = []
 
+#async def wait_for_server_ready(server, timeout=30):
 async def wait_for_server_ready(server, timeout=30):
+    #host = {"host": server["name"], "port": server["port"]}
+    #start = time.time()
     async with httpx.AsyncClient() as client:
         start = time.time()
         while True:

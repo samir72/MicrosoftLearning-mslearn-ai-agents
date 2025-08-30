@@ -54,7 +54,7 @@ class RoutingAgent:
         
         # Initialize Azure AI Agents client
         self.agents_client = AgentsClient(
-            endpoint=os.environ["PROJECT_ENDPOINT"],
+            endpoint=os.environ["SA_PROJECT_ENDPOINT"],
             credential=DefaultAzureCredential(
                 exclude_environment_credential=True,
                 exclude_managed_identity_credential=True
@@ -112,6 +112,7 @@ class RoutingAgent:
             raise ValueError(f'Agent {agent_name} not found')
         
         # Retrieve the remote agent's A2A client using the agent name 
+        client = self.remote_agent_connections[agent_name] 
         
 
         if not client:
@@ -120,12 +121,21 @@ class RoutingAgent:
         message_id = str(uuid.uuid4())
 
         # Construct the payload to send to the remote agent
+        payload: dict[str, Any] = {
+        'message': {
+            'role': 'user',
+            'parts': [{'kind': 'text', 'text': task}],
+            'messageId': message_id,
+        },
+        }
         
         
         # Wrap the payload in a SendMessageRequest object
+        message_request = SendMessageRequest(id=message_id, params=MessageSendParams.model_validate(payload))
         
 
         # Send the message to the remote agent client and await the response
+        send_response: SendMessageResponse = await client.send_message(message_request=message_request)
         
         
         if not isinstance(send_response.root, SendMessageSuccessResponse):
@@ -146,7 +156,7 @@ class RoutingAgent:
             # Create Azure AI Agent with the send_message function
             functions = FunctionTool({self.send_message})
             self.azure_agent = self.agents_client.create_agent(
-                model=os.environ["MODEL_DEPLOYMENT_NAME"],
+                model=os.environ["SA_MODEL_DEPLOYMENT_NAME"],
                 name="routing-agent",
                 instructions=f"""
                 You are an expert Routing Delegator that helps users with requests.

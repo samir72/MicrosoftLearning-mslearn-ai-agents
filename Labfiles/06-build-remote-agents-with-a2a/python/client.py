@@ -12,6 +12,7 @@ port = os.environ["ROUTING_AGENT_PORT"]
 
 def send_prompt(prompt: str):
     url = f"http://{server}:{port}/message"
+    print(f"Sending prompt to {url}")
     payload = {"message": prompt}
     try:
         response = requests.post(url, json=payload)
