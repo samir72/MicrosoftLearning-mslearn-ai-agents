@@ -25,7 +25,7 @@ class OutlineAgent:
         if self.agent:
             return self.agent
 
-        # Create the title agent
+        # Create the outline agent
         self.agent = self.client.create_agent(
             model=os.environ['SA_MODEL_DEPLOYMENT_NAME'],
             name='foundry-outline-agent',
@@ -49,7 +49,7 @@ class OutlineAgent:
 
         # Create and run the agent
         run = self.client.runs.create_and_process(thread_id=thread.id, agent_id=self.agent.id)
-
+        print(f'Outline Agent Run : Thread Id : {thread.id}') # Adding a new line to debug the agent flow.
         if run.status == 'failed':
             print(f'Title Agent: Run failed - {run.last_error}')
             return [f'Error: {run.last_error}']

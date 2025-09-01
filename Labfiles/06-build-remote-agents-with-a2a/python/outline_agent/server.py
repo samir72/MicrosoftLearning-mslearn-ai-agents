@@ -61,7 +61,7 @@ routes = a2a_app.routes()
 
 # Add health check endpoint
 async def health_check(request: Request) -> PlainTextResponse:
-    return PlainTextResponse('AI Foundry Outline Agent is running!')
+    return PlainTextResponse('AI Foundry Outline Agent is running and healthy.')
 
 routes.append(Route(path='/health', methods=['GET'], endpoint=health_check))
 

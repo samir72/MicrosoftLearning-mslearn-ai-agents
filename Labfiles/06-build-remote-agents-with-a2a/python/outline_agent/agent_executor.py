@@ -62,13 +62,16 @@ class OutlineAgentExecutor(AgentExecutor):
         
         # Create task updater
         updater = TaskUpdater(event_queue, context.task_id, context.context_id)
+        print(f'Outline Agent Task: Task id: {context.task_id} ; context id: {context.context_id}') # Adding a new line to debug the agent flow.
         await updater.submit()
 
         # Start working
         await updater.start_work()
 
         # Process the request
+        print(f'Outline Agent: Executing for message : {context.message.parts} ;context : {context.context_id}') # Adding a new line to debug the agent flow.
         await self._process_request(context.message.parts, context.context_id, updater)
+        
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue):
         print(f'Outline Agent: Cancelling execution for context {context.context_id}')

@@ -53,7 +53,7 @@ class TitleAgent:
 
         # Create and run the agent
         run = self.client.runs.create_and_process(thread_id=thread.id, agent_id=self.agent.id)
-
+        print(f'Ttile Agent Run : {thread.id} ; Agent Id : {Agent.id}' ) # Adding a new line to debug the agent flow.
 
         if run.status == 'failed':
             print(f'Title Agent: Run failed - {run.last_error}')
